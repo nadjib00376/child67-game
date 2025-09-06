@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>طفل 67 يطير - متعدد الأوضاع</title>
+<style>
+ html,body{margin:0;height:100%;background:#87ceeb;color:#fff;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;overflow:hidden}
+ #canvas{position:fixed;inset:0}
+ .ui{position:fixed;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between}
+ .top{display:flex;gap:8px;padding:12px;pointer-events:auto}
+ .badge{background:rgba(0,0,0,.3);backdrop-filter:blur(6px);padding:8px 12px;border-radius:12px;font-weight:700;cursor:pointer}
+ .center{display:flex;align-items:center;justify-content:center;flex:1}
+ .msg{font-size:20px;color:#000;font-weight:700;text-align:center}
+ #menu{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;color:#000;padding:18px;border-radius:12px;min-width:320px;pointer-events:auto}
+ .btn{display:block;padding:10px;margin:8px 0;border-radius:8px;background:#eee;border:0;cursor:pointer}
+ #shop,#codes,#admin,#leaderboard{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;color:#000;padding:16px;border-radius:12px;display:none;pointer-events:auto;min-width:300px}
+ .close{margin-top:10px;padding:8px;background:#ddd;border-radius:8px;text-align:center;cursor:pointer}
+ label{font-weight:700}
+ input,select{padding:6px;border-radius:6px;border:1px solid #aaa;width:100%}
+ #skinsList .skin{display:flex;justify-content:space-between;padding:8px;border-radius:8px;margin:6px 0;background:#f5f5f5;cursor:pointer}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div class="ui">
+  <div class="top">
+    <div class="badge" id="score">0</div>
+    <div class="badge" id="best">Best: 0</div>
+    <div class="badge" id="shopBtn">🛒 متجر</div>
+    <div class="badge" id="codesBtn">🔑 Codes</div>
+    <div class="badge" id="lbBtn">🏆 ليدربورد</div>
+  </div>
+  <div class="center" id="centerMsg"><div class="msg">اضغط مسافة لبدء اللعب.</div></div>
+  <div class="top" style="justify-content:center;align-items:end">
+    <div class="badge" id="skinLabel">السكن: عادي</div>
+  </div>
+</div>
+<div id="menu">
+  <h3>اختر الوضع</h3>
+  <button class="btn" id="classicBtn">كلاسيك</button>
+  <button class="btn" id="rankedBtn">رانكد</button>
+  <button class="btn" id="trainBtn">تدريب</button>
+  <hr/>
+  <label>الوضع أونلاين:</label>
+  <select id="onlineToggle"><option value="false">غير متصل (محلي)</option><option value="true">متصل</option></select>
+  <label>سيرفر الواجهة (لـ رانكد):</label>
+  <input id="serverUrl" placeholder="https://example.com" />
+  <div style="margin-top:10px;display:flex;gap:8px">
+    <button class="btn" id="startDemo">حفظ واغلاق</button>
+    <button class="btn" id="openShopFromMenu">افتح المتجر</button>
+  </div>
+</div>
+<div id="shop">
+  <h3>المتجر</h3>
+  <div id="skinsList"></div>
+  <div class="close" id="closeShop">إغلاق</div>
+</div>
+<div id="codes">
+  <label>ادخل الكود:</label>
+  <input id="codeInput" type="text" />
+  <button class="btn" id="submitCode">تأكيد</button>
+  <div class="close" id="closeCodes">إغلاق</div>
+</div>
+<div id="admin">
+  <h3>لوحة الادمن</h3>
+  <label>اضبط النقاط:</label>
+  <input id="moneyInput" type="number" />
+  <button class="btn" id="setMoney">تحديث</button>
+  <label><input id="godCh" type="checkbox"/> وضع عدم الموت</label>
+  <label><input id="noclipCh" type="checkbox"/> اختراق الجدران</label>
+  <div class="close" id="closeAdmin">إغلاق</div>
+</div>
+<div id="leaderboard">
+  <h3>Leaderboard</h3>
+  <div id="lbList"></div>
+  <div class="close" id="closeLb">إغلاق</div>
+</div>
+<script>
+const canvas=document.getElementById('canvas');const ctx=canvas.getContext('2d');let W=0,H=0;function resize(){W=canvas.width=innerWidth;H=canvas.height=innerHeight}addEventListener('resize',resize);resize();
+let mode='classic';let online=false;let server='';let score=0;let best=+localStorage.getItem('best_child')||0;document.getElementById('best').textContent='Best: '+best;
+let skins=[{name:'عادي',color:'#ff6347',price:0},{name:'أزرق',color:'#1e90ff',price:20},{name:'بيتزا',color:'#ffa500',price:70},{name:'شرطي',color:'#00008b',price:90},{name:'شطيرة',color:'#deb887',price:110},{name:'ذهبي',color:'#ffd700',price:200}];
+let owned=JSON.parse(localStorage.getItem('owned')||'[0]');let currentSkin=localStorage.getItem('currentSkin')||0;let coins=+localStorage.getItem('coins')||0;let god=false;let noclip=false;let rankedOnline=false;
+function buildSkins(){let c=document.getElementById('skinsList');c.innerHTML='';skins.forEach((s,i)=>{let d=document.createElement('div');d.className='skin';d.dataset.i=i;d.innerHTML=`<div>${s.name}</div><div>${owned.includes(i)?'✔':'سعر '+s.price}</div>`;d.onclick=()=>{if(owned.includes(i)){currentSkin=i;localStorage.setItem('currentSkin',i);document.getElementById('skinLabel').textContent='السكن: '+s.name;closeShop()}else if(coins>=s.price){coins-=s.price;localStorage.setItem('coins',coins);owned.push(i);localStorage.setItem('owned',JSON.stringify(owned));currentSkin=i;localStorage.setItem('currentSkin',i);document.getElementById('skinLabel').textContent='السكن: '+s.name;closeShop()}};c.appendChild(d)})}
+function openShop(){buildSkins();document.getElementById('shop').style.display='block'}function closeShop(){document.getElementById('shop').style.display='none'}document.getElementById('shopBtn').onclick=openShop;document.getElementById('closeShop').onclick=closeShop;document.getElementById('openShopFromMenu').onclick=openShop;
+let player,obs=[],running=false,gravity=0.5,jump=-8,obsGap=160,obsSpeed=3,frame=0,gameSpeedInc=0;
+function startGame(){player={x:W*0.2,y:H/2,w:40,h:40,vy:0};obs=[];score=0;frame=0;obsSpeed=3;gameSpeedInc=0;running=true;document.getElementById('menu').style.display='none';document.getElementById('centerMsg').style.opacity='0'}
+function flap(){player.vy=jump}
+addEventListener('keydown',e=>{if(e.code==='Space'){if(!running)startGame();else flap()}});
+function spawn(){let top=Math.random()*(H-obsGap-140)+60;obs.push({x:W,y:0,w:60,h:top});obs.push({x:W,y:top+obsGap,w:60,h:H-(top+obsGap)})}
+function collide(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y}
+async function submitScore(name,sc){if(!rankedOnline)return saveLocalRank(name,sc);try{let res=await fetch(server+'/api/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name,score:sc})});return res.ok}catch(e){return saveLocalRank(name,sc)}}
+function saveLocalRank(name,sc){let lb=JSON.parse(localStorage.getItem('localLB')||'[]');lb.push({name,score:sc,date:Date.now()});lb.sort((a,b)=>b.score-a.score);localStorage.setItem('localLB',JSON.stringify(lb));return true}
+async function fetchLeaderboard(){if(rankedOnline){try{let res=await fetch(server+'/api/top');let data=await res.json();renderLB(data);return}catch(e){}}let lb=JSON.parse(localStorage.getItem('localLB')||'[]');renderLB(lb)}
+function renderLB(list){let c=document.getElementById('lbList');c.innerHTML='';(list||[]).slice(0,20).forEach((it,i)=>{let div=document.createElement('div');div.textContent=(i+1)+'. '+it.name+' - '+it.score;c.appendChild(div)})}
+function openLB(){document.getElementById('leaderboard').style.display='block';fetchLeaderboard()}function closeLB(){document.getElementById('leaderboard').style.display='none'}document.getElementById('lbBtn').onclick=openLB;document.getElementById('closeLb').onclick=closeLB;
+function update(){ctx.clearRect(0,0,W,H);if(!running){requestAnimationFrame(update);return}frame++;if(frame%100===0)spawn();if(mode!=='train'&&frame%500===0){obsSpeed+=0.5;gameSpeedInc+=0.5}player.vy+=gravity;player.y+=player.vy;let sk=skins[currentSkin];ctx.fillStyle=sk.color;ctx.fillRect(player.x,player.y,player.w,player.h);for(let o of obs){o.x-=obsSpeed;ctx.fillStyle='#248f24';ctx.fillRect(o.x,o.y,o.w,o.h);if(!god){if(!noclip&&collide(player,o))end();}}obs=obs.filter(o=>o.x+o.w>0);score+=0.05;document.getElementById('score').textContent=Math.floor(score);if(player.y<0||player.y+player.h>H){if(!god){end()}}requestAnimationFrame(update)}
+async function end(){running=false;if(score>best){best=Math.floor(score);localStorage.setItem('best_child',best)}coins+=Math.floor(score/10);localStorage.setItem('coins',coins);document.getElementById('best').textContent='Best: '+best;document.getElementById('centerMsg').style.opacity='1';document.getElementById('centerMsg').innerHTML='<div class="msg">انتهت. نتيجتك '+Math.floor(score)+'. اضغط مسافة لإعادة.</div>';if(mode==='ranked'){let name=prompt('ادخل اسم للترتيب')||'لاعب';await submitScore(name,Math.floor(score))}}
+buildSkins();
+let codesEl=document.getElementById('codes');document.getElementById('codesBtn').onclick=()=>{codesEl.style.display='block'};document.getElementById('closeCodes').onclick=()=>{codesEl.style.display='none'};document.getElementById('submitCode').onclick=()=>{let v=document.getElementById('codeInput').value.trim();document.getElementById('codeInput').value='';if(v==='Admin'){document.getElementById('admin').style.display='block'}if(v==='GIVE100'){coins+=100;localStorage.setItem('coins',coins);alert('تم اعطاء 100') }}
+let adminEl=document.getElementById('admin');document.getElementById('closeAdmin').onclick=()=>{adminEl.style.display='none'};document.getElementById('setMoney').onclick=()=>{let v=+document.getElementById('moneyInput').value;coins=v;localStorage.setItem('coins',coins)};document.getElementById('godCh').onchange=(e)=>{god=e.target.checked};document.getElementById('noclipCh').onchange=(e)=>{noclip=e.target.checked}
+let shopEl=document.getElementById('shop');document.getElementById('startDemo').onclick=()=>{online=document.getElementById('onlineToggle').value==='true';server=document.getElementById('serverUrl').value;document.getElementById('menu').style.display='none'};document.getElementById('classicBtn').onclick=()=>{mode='classic';document.getElementById('menu').style.display='none'};document.getElementById('rankedBtn').onclick=()=>{mode='ranked';document.getElementById('menu').style.display='none'};document.getElementById('trainBtn').onclick=()=>{mode='train';document.getElementById('menu').style.display='none'}
+requestAnimationFrame(update);
+</script>
+</body>
+</html>
